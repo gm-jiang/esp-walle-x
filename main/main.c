@@ -28,28 +28,74 @@
 #include "soft_ap.h"
 #include "tcp_server.h"
 
+#include "sdkconfig.h"
+#include "led_strip.h"
+
 static const char *TAG = "ESP-WALLE";
 
-#define BLINK_GPIO 8 //For ESP32-C3
+/* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
+   or you can edit the following line and set a number here.
+*/
+#define BLINK_GPIO CONFIG_BLINK_GPIO
+
+static uint8_t s_led_state = 0;
+
+#ifdef CONFIG_BLINK_LED_RMT
+static led_strip_t *pStrip_a;
+
+static void blink_led(void)
+{
+    /* If the addressable LED is enabled */
+    if (s_led_state) {
+        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+        pStrip_a->set_pixel(pStrip_a, 0, 16, 128, 16);
+        /* Refresh the strip to send data */
+        pStrip_a->refresh(pStrip_a, 100);
+    } else {
+        /* Set all LED off to clear all pixels */
+        pStrip_a->clear(pStrip_a, 50);
+    }
+}
+
+static void configure_led(void)
+{
+    ESP_LOGI(TAG, "Example configured to blink addressable LED!");
+    /* LED strip initialization with the GPIO and pixels number*/
+    pStrip_a = led_strip_init(CONFIG_BLINK_LED_RMT_CHANNEL, BLINK_GPIO, 1);
+    /* Set all LED off to clear all pixels */
+    pStrip_a->clear(pStrip_a, 50);
+}
+
+#elif CONFIG_BLINK_LED_GPIO
+
+static void blink_led(void)
+{
+    /* Set the GPIO level according to the state (LOW or HIGH)*/
+    gpio_set_level(BLINK_GPIO, s_led_state);
+}
+
+static void configure_led(void)
+{
+    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
+    gpio_reset_pin(BLINK_GPIO);
+    /* Set the GPIO as a push/pull output */
+    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+}
+
+#endif
 
 static void ledc_blink_task(void *pvParameters)
 {
-    /* Configure the IOMUX register for pad BLINK_GPIO (some pads are
-       muxed to GPIO on reset already, but some default to other
-       functions and need to be switched to GPIO. Consult the
-       Technical Reference for a list of pads and their default
-       functions.)
-    */
-    gpio_pad_select_gpio(BLINK_GPIO);
-    /* Set the GPIO as a push/pull output */
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-    while(1) {
-        /* Blink off (output low) */
-        gpio_set_level(BLINK_GPIO, 0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        /* Blink on (output high) */
-        gpio_set_level(BLINK_GPIO, 1);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    /* Configure the peripheral according to the LED type */
+    configure_led();
+
+    while (1) {
+        ESP_LOGV(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
+        blink_led();
+        /* Toggle the LED state */
+        s_led_state = !s_led_state;
+        vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
     }
 }
 
@@ -66,6 +112,6 @@ void app_main(void)
     wifi_init_softap();
 
     xTaskCreate(tcp_server_task, "tcp_server", 4096, NULL, 5, NULL);
-    xTaskCreate(ledc_blink_task, "led_blink", 1024, NULL, 4, NULL);
+    xTaskCreate(ledc_blink_task, "led_blink", 2048, NULL, 3, NULL);
 }
 
