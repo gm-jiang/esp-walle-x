@@ -31,6 +31,7 @@
 #include "sdkconfig.h"
 #include "led_strip.h"
 #include "pid_control.h"
+#include "mpu6050.h"
 
 static const char *TAG = "ESP-WALLE";
 
@@ -110,6 +111,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
+    mpu6050_init();
     //setup a soft ap
     wifi_init_softap();
 

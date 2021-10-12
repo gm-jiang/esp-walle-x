@@ -17,11 +17,11 @@
 #include "control.h"
 
 
-#define GPIO_OUTPUT_IO_M0    4  //left
-#define GPIO_OUTPUT_IO_M1    5
+#define GPIO_OUTPUT_IO_M0    8  //left
+#define GPIO_OUTPUT_IO_M1    9
 
-#define GPIO_OUTPUT_IO_M2    6  //right
-#define GPIO_OUTPUT_IO_M3    7
+#define GPIO_OUTPUT_IO_M2    18  //right
+#define GPIO_OUTPUT_IO_M3    19
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_M0) | (1ULL<<GPIO_OUTPUT_IO_M1) | \
                               (1ULL<<GPIO_OUTPUT_IO_M2) | (1ULL<<GPIO_OUTPUT_IO_M3) )
