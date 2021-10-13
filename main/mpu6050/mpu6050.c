@@ -1,7 +1,11 @@
 #include <stdio.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "mpu6050.h"
+#include "inv_mpu.h"
 
 static const char *TAG = "i2c-mpu6050";
 
@@ -43,15 +47,23 @@ static esp_err_t mpu6050_register_write_byte(uint8_t reg_addr, uint8_t data)
 
 uint8_t mpu_write_len(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *buf)
 {
-    return 0;
-} 
+    int ret;
+    uint8_t write_buf[64];
+
+    write_buf[0] = reg;
+    memcpy(&write_buf[1], buf, len);
+
+    ret = i2c_master_write_to_device(I2C_MASTER_NUM, addr, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS);
+
+    return ret;
+}
 
 uint8_t mpu_read_len(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *buf)
 {
-    return 0;
+    return i2c_master_write_read_device(I2C_MASTER_NUM, addr, &reg, 1, buf, len, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS);
 }
 
-uint8_t mpu_delay_ms(uint32_t ms)
+uint8_t mpu6050_delay_ms(uint32_t ms)
 {
     esp_rom_delay_us(1000*ms);
     return 0;
@@ -96,7 +108,7 @@ void mpu6050_simple_test(void)
     ESP_LOGI(TAG, "I2C unitialized successfully");
 }
 
-uint8_t mpu_reset_mpu6050(void)
+uint8_t mpu6050_reset(void)
 {
     mpu6050_register_write_byte(MPU_PWR_MGMT1_REG, 0x80); // Reset MPU6050
     esp_rom_delay_us(100*1000);
@@ -104,7 +116,7 @@ uint8_t mpu_reset_mpu6050(void)
     return 0;
 }
 
-uint8_t mpu_set_lpf(uint16_t lpf)
+uint8_t mpu6050_set_lpf(uint16_t lpf)
 {
     uint8_t data = 0;
     if (lpf >= 188) data = 1;
@@ -116,27 +128,27 @@ uint8_t mpu_set_lpf(uint16_t lpf)
     return mpu6050_register_write_byte(MPU_CFG_REG, data);
 }
 
-uint8_t mpu_set_rate(uint16_t rate)
+uint8_t mpu6050_set_rate(uint16_t rate)
 {
     uint8_t data;
     if (rate > 1000) rate = 1000;
     if (rate < 4) rate = 4;
     data = 1000/rate - 1;
     data = mpu6050_register_write_byte(MPU_SAMPLE_RATE_REG, data);
-    return mpu_set_lpf(rate/2);
+    return mpu6050_set_lpf(rate/2);
 }
 
-uint8_t mpu_set_gyro_fsr(uint8_t fsr)
+uint8_t mpu6050_set_gyro_fsr(uint8_t fsr)
 {
     return mpu6050_register_write_byte(MPU_GYRO_CFG_REG, fsr<<3);
 }
 
-uint8_t mpu_set_accel_fsr(uint8_t fsr)
+uint8_t mpu6050_set_accel_fsr(uint8_t fsr)
 {
     return mpu6050_register_write_byte(MPU_ACCEL_CFG_REG, fsr<<3);
 }
 
-uint8_t mpu_com_config(void)
+uint8_t mpu6050_com_config(void)
 {
     mpu6050_register_write_byte(MPU_INT_EN_REG, 0X00); // Disable all interrupt
     mpu6050_register_write_byte(MPU_USER_CTRL_REG, 0X00); //DisableI2C master
@@ -145,17 +157,54 @@ uint8_t mpu_com_config(void)
     return 0;
 }
 
-uint8_t mpu_devid_read(uint8_t *devid)
+uint8_t mpu6050_devid_read(uint8_t *devid)
 {
     mpu6050_register_read(MPU_DEVICE_ID_REG, devid, 1); //Read device id
     return 0;
 }
 
-uint8_t mpu_clk_pll_config(void)
+uint8_t mpu6050_clk_pll_config(void)
 {
     mpu6050_register_write_byte(MPU_PWR_MGMT1_REG, 0X01); //set CLKSEL,PLL X as reference
     mpu6050_register_write_byte(MPU_PWR_MGMT2_REG, 0X00); //ACC and GYRO workd
     return 0;
+}
+
+short MPU_Get_Temperature(void)
+{
+    uint8_t buf[2]; 
+    short raw;
+    float temp;
+    mpu_read_len(MPU_ADDR, MPU_TEMP_OUTH_REG, 2, buf);
+    raw = ((uint16_t)buf[0]<<8)|buf[1];
+    temp = 36.53+((double)raw)/340;
+    return temp*100;;
+}
+
+uint8_t MPU_Get_Gyroscope(short *gx,short *gy,short *gz)
+{
+    uint8_t buf[6],res;
+    res = mpu_read_len(MPU_ADDR, MPU_GYRO_XOUTH_REG, 6, buf);
+    if(res == 0)
+    {
+        *gx = ((uint16_t)buf[0]<<8)|buf[1];
+        *gy = ((uint16_t)buf[2]<<8)|buf[3];
+        *gz = ((uint16_t)buf[4]<<8)|buf[5];
+    }
+    return res;
+}
+
+uint8_t MPU_Get_Accelerometer(short *ax,short *ay,short *az)
+{
+    uint8_t buf[6], res;
+    res=mpu_read_len(MPU_ADDR, MPU_ACCEL_XOUTH_REG, 6, buf);
+    if(res == 0)
+    {
+        *ax = ((uint16_t)buf[0]<<8)|buf[1];
+        *ay = ((uint16_t)buf[2]<<8)|buf[3];
+        *az = ((uint16_t)buf[4]<<8)|buf[5];
+    }
+    return res;;
 }
 
 uint8_t mpu6050_init(void)
@@ -165,19 +214,47 @@ uint8_t mpu6050_init(void)
     ESP_ERROR_CHECK(i2c_master_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
 
-    mpu_reset_mpu6050();
-    mpu_set_gyro_fsr(3);
-    mpu_set_accel_fsr(0);
-    mpu_set_rate(50);
-    mpu_com_config();
-    mpu_devid_read(&devid);
+    mpu6050_reset();
+    mpu6050_set_gyro_fsr(3);
+    mpu6050_set_accel_fsr(0);
+    mpu6050_set_rate(50);
+    mpu6050_com_config();
+    mpu6050_devid_read(&devid);
     if (devid == MPU_ADDR) {
-        mpu_clk_pll_config();
-        mpu_set_rate(50);
+        mpu6050_clk_pll_config();
+        mpu6050_set_rate(50);
         ESP_LOGI(TAG, "MPU6050 Init Successed!, DeviceID: %x", devid);
-        return 0;
     }
-    return 1;
+
+    while(mpu_dmp_init())
+    {
+        ESP_LOGI(TAG, "MPU6050 Error");
+        mpu6050_delay_ms(2000);
+    }
+    ESP_LOGI(TAG, "MPU6050 OK");
+    return 0;
 }
 
+void mpu6050_sensor_task(void *pvParameters)
+{
+    float pitch, roll, yaw;
+    short aacx, aacy, aacz;
+    short gyrox, gyroy, gyroz;
+    short temp;
+
+    mpu6050_init();
+
+    while(1) {
+        if (mpu_dmp_get_data(&pitch, &roll, &yaw) == 0) {
+            temp = MPU_Get_Temperature();
+            MPU_Get_Accelerometer(&aacx, &aacy, &aacz);
+            MPU_Get_Gyroscope(&gyrox, &gyroy, &gyroz);
+            ESP_LOGI(TAG, "Temp: %d.%d", temp/100, temp%10);
+            ESP_LOGI(TAG, "===============================");
+            ESP_LOGI(TAG, " %3.2f(P), %3.2f(R), %3.2f(Y)", pitch, roll, yaw);
+            ESP_LOGI(TAG, "===============================");
+            vTaskDelay(200 / portTICK_PERIOD_MS);
+        }
+    }
+}
 

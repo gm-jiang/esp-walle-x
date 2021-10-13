@@ -111,11 +111,11 @@ void app_main(void)
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    mpu6050_init();
     //setup a soft ap
     wifi_init_softap();
 
     xTaskCreate(tcp_server_task, "tcp_server", 4096, NULL, 5, NULL);
-    xTaskCreate(ledc_blink_task, "led_blink", 2048, NULL, 3, NULL);
+    xTaskCreate(ledc_blink_task, "led_blink", 4096, NULL, 3, NULL);
+    xTaskCreate(mpu6050_sensor_task, "mpu6050", 4096, NULL, 4, NULL);
 }
 

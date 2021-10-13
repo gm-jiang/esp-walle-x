@@ -48,7 +48,7 @@
 
 #define i2c_write   mpu_write_len
 #define i2c_read    mpu_read_len
-#define delay_ms    mpu_delay_ms
+#define delay_ms    mpu6050_delay_ms
 #define get_ms      mget_ms
 
 #define log_i     printf

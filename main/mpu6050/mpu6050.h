@@ -77,10 +77,12 @@ extern "C" {
 #define MPU_ADDR			0X68
 
 uint8_t mpu6050_init(void);
-uint8_t mpu_delay_ms(uint32_t ms);
+uint8_t mpu6050_delay_ms(uint32_t ms);
 uint8_t mpu_get_ms(void);
 uint8_t mpu_write_len(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *buf);
 uint8_t mpu_read_len(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *buf);
+
+void mpu6050_sensor_task(void *pvParameters);
 
 #ifdef __cplusplus
 }
