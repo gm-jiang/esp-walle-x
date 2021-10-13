@@ -91,7 +91,7 @@ static void ledc_blink_task(void *pvParameters)
 
     /* Configure the peripheral according to the LED type */
     configure_led();
-    pid_test();
+    //pid_test();
 
     while (1) {
         ESP_LOGV(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
