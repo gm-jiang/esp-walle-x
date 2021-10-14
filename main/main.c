@@ -33,30 +33,21 @@
 #include "pid_control.h"
 #include "mpu6050.h"
 
-static const char *TAG = "ESP-WALLE";
-
 /* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
    or you can edit the following line and set a number here.
 */
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 
-static uint8_t s_led_state = 0;
+static const char *TAG = "ESP-WALLE";
 
-#ifdef CONFIG_BLINK_LED_RMT
 static led_strip_t *pStrip_a;
 
-static void blink_led(void)
+static void blink_led(uint8_t r_value, uint8_t g_value)
 {
-    /* If the addressable LED is enabled */
-    if (s_led_state) {
-        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        pStrip_a->set_pixel(pStrip_a, 0, 16, 128, 16);
-        /* Refresh the strip to send data */
-        pStrip_a->refresh(pStrip_a, 100);
-    } else {
-        /* Set all LED off to clear all pixels */
-        pStrip_a->clear(pStrip_a, 50);
-    }
+    /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+    pStrip_a->set_pixel(pStrip_a, 0, r_value, g_value, 0);
+    /* Refresh the strip to send data */
+    pStrip_a->refresh(pStrip_a, 100);
 }
 
 static void configure_led(void)
@@ -68,37 +59,28 @@ static void configure_led(void)
     pStrip_a->clear(pStrip_a, 50);
 }
 
-#elif CONFIG_BLINK_LED_GPIO
-
-static void blink_led(void)
-{
-    /* Set the GPIO level according to the state (LOW or HIGH)*/
-    gpio_set_level(BLINK_GPIO, s_led_state);
-}
-
-static void configure_led(void)
-{
-    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
-    gpio_reset_pin(BLINK_GPIO);
-    /* Set the GPIO as a push/pull output */
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-}
-
-#endif
-
+extern QueueHandle_t MPU6050_Q;
 static void ledc_blink_task(void *pvParameters)
 {
-
     /* Configure the peripheral according to the LED type */
     configure_led();
-    //pid_test();
 
     while (1) {
-        ESP_LOGV(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
-        blink_led();
-        /* Toggle the LED state */
-        s_led_state = !s_led_state;
-        vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
+        mpu6050_data_t pxRxedMessage;
+        int8_t red_data, green_data;
+        if (MPU6050_Q != NULL) {
+            if (xQueueReceive(MPU6050_Q, &(pxRxedMessage), (portTickType)portMAX_DELAY)) {
+                red_data = (int8_t)pxRxedMessage.pitch;
+                red_data = red_data < 0 ? (-1*red_data) : red_data;
+
+                green_data = (int8_t)pxRxedMessage.roll;
+                green_data = green_data < 0 ? (-1*green_data) : green_data;
+
+                ESP_LOGI(TAG, "%d, %d", red_data, green_data);
+                blink_led(red_data, green_data);
+            }
+        }
+        vTaskDelay(1/portTICK_PERIOD_MS);
     }
 }
 
@@ -115,7 +97,6 @@ void app_main(void)
     wifi_init_softap();
 
     xTaskCreate(tcp_server_task, "tcp_server", 4096, NULL, 5, NULL);
-    xTaskCreate(ledc_blink_task, "led_blink", 4096, NULL, 3, NULL);
+    xTaskCreate(ledc_blink_task, "led_blink", 4096, NULL, 4, NULL);
     xTaskCreate(mpu6050_sensor_task, "mpu6050", 4096, NULL, 4, NULL);
 }
-

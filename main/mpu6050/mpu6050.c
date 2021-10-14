@@ -2,6 +2,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "mpu6050.h"
@@ -207,6 +208,15 @@ uint8_t MPU_Get_Accelerometer(short *ax,short *ay,short *az)
     return res;;
 }
 
+uint8_t MPU_Data_Pack(mpu6050_data_t *mpu_data, short temp, float pitch, float roll, float yaw)
+{
+    mpu_data->temp = temp;
+    mpu_data->pitch = pitch;
+    mpu_data->roll = roll;
+    mpu_data->yaw = yaw;
+    return 0;
+}
+
 uint8_t mpu6050_init(void)
 {
     uint8_t devid;
@@ -235,25 +245,36 @@ uint8_t mpu6050_init(void)
     return 0;
 }
 
+#define MPU6050_Q_LEN   10
+QueueHandle_t MPU6050_Q = NULL;
 void mpu6050_sensor_task(void *pvParameters)
 {
     float pitch, roll, yaw;
     short aacx, aacy, aacz;
     short gyrox, gyroy, gyroz;
     short temp;
+    mpu6050_data_t mpu6050_data;
+
+    MPU6050_Q = xQueueCreate(MPU6050_Q_LEN, sizeof(mpu6050_data));
+    if (MPU6050_Q == NULL) {
+        ESP_LOGE(TAG, "MPU6050 Create Q failed");
+        return;
+    }
 
     mpu6050_init();
-
     while(1) {
         if (mpu_dmp_get_data(&pitch, &roll, &yaw) == 0) {
             temp = MPU_Get_Temperature();
             MPU_Get_Accelerometer(&aacx, &aacy, &aacz);
             MPU_Get_Gyroscope(&gyrox, &gyroy, &gyroz);
-            ESP_LOGI(TAG, "Temp: %d.%d", temp/100, temp%10);
-            ESP_LOGI(TAG, "===============================");
-            ESP_LOGI(TAG, " %3.2f(P), %3.2f(R), %3.2f(Y)", pitch, roll, yaw);
-            ESP_LOGI(TAG, "===============================");
-            vTaskDelay(200 / portTICK_PERIOD_MS);
+            MPU_Data_Pack(&mpu6050_data, temp, pitch, roll, yaw);
+
+            //ESP_LOGI(TAG, "Temp: %d.%d", temp/100, temp%10);
+            //ESP_LOGI(TAG, "===============================");
+            //ESP_LOGI(TAG, " %3.2f(P), %3.2f(R), %3.2f(Y)", mpu6050_data.pitch, mpu6050_data.roll, mpu6050_data.yaw);
+            //ESP_LOGI(TAG, "===============================");
+            xQueueSend(MPU6050_Q, &mpu6050_data, (portTickType)0);
+            vTaskDelay(1 / portTICK_PERIOD_MS);
         }
     }
 }

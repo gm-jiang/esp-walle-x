@@ -76,6 +76,14 @@ extern "C" {
 
 #define MPU_ADDR			0X68
 
+typedef struct _mpu6050_data_t
+{
+    short temp;
+    float pitch;
+    float roll;
+    float yaw;
+} mpu6050_data_t;
+
 uint8_t mpu6050_init(void);
 uint8_t mpu6050_delay_ms(uint32_t ms);
 uint8_t mpu_get_ms(void);
